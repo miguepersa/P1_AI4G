@@ -35,6 +35,7 @@ public class Kinematic : MonoBehaviour, Target
     private const string AVOID = "avoid";
 
     [SerializeField] private Kinematic[] separationTargets;
+    [SerializeField] private Pathfinder pathfinder;
     [SerializeField] private GameObject targetGameObject = null;
     [SerializeField] private Target targetObject = null;
     [SerializeField] private float timeToTarget = 0.1f;
@@ -45,7 +46,8 @@ public class Kinematic : MonoBehaviour, Target
     [SerializeField] private bool dynamic = false;
     [SerializeField] private bool kinematic = false;
     [SerializeField] private bool move = true;
-    [SerializeField] private string action = "wander";
+    [SerializeField] private bool findPath = false;
+    [SerializeField] private string action = "face";
     [SerializeField] private float distanceToFlee = 5f;
     [SerializeField] private float maxAcceleration = 3f;
     [SerializeField] private float maxAngularAcceleration = 3f;
@@ -58,6 +60,10 @@ public class Kinematic : MonoBehaviour, Target
     [SerializeField] private float wanderOffset = 1f;
     [SerializeField] private float wanderRadius = 3f;
     [SerializeField] private float wanderRate = 1f;
+
+    [SerializeField] private int pathToX = 0;
+    [SerializeField] private int pathToZ = 0;
+
     
     private float wanderOrientation = 0f;
 
@@ -75,8 +81,10 @@ public class Kinematic : MonoBehaviour, Target
 
     private Vector3 linear = Vector3.zero;
     private float angular = 0f;
+    private List<Node> path = null;
+    private float distanceToNode;
+    private int currentNodeIndex = 0;
 
-    
 
     void Start()
     {
@@ -85,7 +93,35 @@ public class Kinematic : MonoBehaviour, Target
 
     void Update()
     {
-        if (dynamic)
+        if (findPath)
+        {
+            if (path == null)
+            {
+                path = this.pathfinder.FindPath(transform.position, new Vector3(pathToX, 0, pathToZ));
+            }
+
+            if (currentNodeIndex < path.Count)
+            {
+                direction = path[currentNodeIndex].Position - transform.position;
+                distanceToNode = direction.magnitude;
+
+                if (distanceToNode < 0.25f)
+                {
+                    currentNodeIndex++;
+                }
+
+                transform.forward = direction.normalized;
+                transform.position += maxSpeed * Time.deltaTime * direction.normalized;
+
+            }
+            else
+            {
+                path = null;
+                findPath = false;
+                currentNodeIndex = 0;
+            }
+        }
+        else if (dynamic)
         {
             switch (action)
             {
@@ -103,7 +139,7 @@ public class Kinematic : MonoBehaviour, Target
                     Align();
                     break;
                 case FACE:
-                    Face();
+                    transform.forward = (targetObject.Position - transform.position).normalized;
                     break;
                 case MATCH:
                     VelocityMatch();
@@ -150,10 +186,13 @@ public class Kinematic : MonoBehaviour, Target
             Move();
         }
         
-        position = transform.position;
-        orientation = transform.eulerAngles.y;
-        target = targetGameObject.transform.position;
-        targetOrientation = targetObject.Orientation;
+        if (dynamic || kinematic)
+        {
+            position = transform.position;
+            orientation = transform.eulerAngles.y;
+            target = targetGameObject.transform.position;
+            targetOrientation = targetObject.Orientation;
+        }
     }
 
     private void Move()
@@ -467,4 +506,18 @@ public class Kinematic : MonoBehaviour, Target
         }
         DArrive();
     }
+
+    void OnDrawGizmos()
+    {
+        if (path != null)
+        {
+            foreach (Node node in path)
+            {
+                Gizmos.color = Color.yellow;
+                Vector3 nodePosition = new Vector3(node.Position.x, 0, node.Position.z);
+                Gizmos.DrawWireCube(nodePosition, Vector3.one * 0.9f);
+            }
+        }
+    }
+ 
 }
